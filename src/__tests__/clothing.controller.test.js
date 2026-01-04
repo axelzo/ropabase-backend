@@ -94,6 +94,7 @@ describe('Clothing Controller', () => {
     it('should create a new item with an image uploaded to Cloudinary', async () => {
       // Configura el 'body' de la petición.
       req.body = { name: 'Jeans', category: 'Pants', color: 'Blue' };
+<<<<<<< HEAD
       // Simula un archivo subido con un buffer de datos.
       req.file = { buffer: Buffer.from('mockImageData') };
       // Define el objeto de la nueva prenda con la URL simulada de Cloudinary y el Public ID.
@@ -106,6 +107,13 @@ describe('Clothing Controller', () => {
       };
       
       // Simula la creación exitosa del ítem en la base de datos.
+=======
+      // Simula la existencia de un objeto 'file' en la petición, como si se hubiera subido una imagen.
+      req.file = { path: 'uploads/image.jpg' };
+      // Define el objeto de la nueva prenda simulada, incluyendo un '_id' y el 'owner' (userId).
+      const newItem = { _id: clothingItemId, ...req.body, owner: userId, imageUrl: '/uploads/image.jpg' };
+      // Simula que 'ClothingItem.create' resuelve con el objeto de la nueva prenda simulada.
+>>>>>>> ffbfab1 (SCRUM-42: normalize the upload image path)
       ClothingItem.create.mockResolvedValue(newItem);
       // Simula la actualización exitosa del usuario.
       User.findByIdAndUpdate.mockResolvedValue({});
