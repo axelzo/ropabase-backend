@@ -27,7 +27,7 @@ export const createClothingItem = async (req, res) => {
     console.log('[CLOTHING] Imagen recibida:', req.file.path);
   }
   const { name, category, color, brand } = req.body;
-  const imageUrl = req.file ? `/${req.file.path.replace(/\\/g, "/")}` : null;
+  const imageUrl = req.file ? `/uploads/${req.file.filename}` : null;
 
   if (!name || !category || !color) {
     console.log('[CLOTHING] Faltan datos obligatorios.');
@@ -69,7 +69,7 @@ export const updateClothingItem = async (req, res) => {
   const dataToUpdate = { name, category, color, brand };
 
   if (req.file) {
-    dataToUpdate.imageUrl = `/${req.file.path.replace(/\\/g, "/")}`;
+    dataToUpdate.imageUrl = `/uploads/${req.file.filename}`;
   }
 
 
@@ -111,7 +111,9 @@ export const deleteClothingItem = async (req, res) => {
     }
 
     // CAMBIO 9: Convertir el ObjectId del propietario a string para la comparación.
+    console.log('[CLOTHING] Debug delete - item.owner:', item.owner, 'req.user.userId:', req.user.userId);
     if (item.owner.toString() !== req.user.userId) {
+      console.log('[CLOTHING] Autorización denegada - owner no coincide');
       return res.status(403).json({ message: 'User not authorized to delete this item' });
     }
 

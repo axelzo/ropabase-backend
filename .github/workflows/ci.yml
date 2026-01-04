@@ -1,0 +1,45 @@
+# GitHub Actions CI Workflow para RopaBase Backend
+# Este workflow ejecuta automáticamente pruebas en cada push y pull request
+# para asegurar que el código cumpla con los estándares de calidad
+
+name: CI
+
+# Define los eventos que disparan el workflow
+on:
+  # Se ejecuta cuando se hace push a las ramas main y develop
+  push:
+    branches:
+  # Se ejecuta cuando se abre o actualiza un pull request a main o develop
+  pull_request:
+    branches: 
+    
+# Define los trabajos (jobs) que se ejecutarán
+jobs:
+  test:
+    # El workflow se ejecuta en la última versión de Ubuntu disponible
+    runs-on: ubuntu-latest
+
+    # Define una matriz de versiones de Node.js para probar en múltiples versiones
+    strategy:
+      matrix:
+        node-version: [22.x]
+
+    # Lista de pasos que se ejecutarán en orden
+    steps:
+    # Paso 1: Clona el repositorio al runner
+    - uses: actions/checkout@v4
+
+    # Paso 2: Instala la versión de Node.js especificada en la matriz
+    - name: Use Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ matrix.node-version }}
+        cache: 'npm'  # Cachea node_modules para acelerar futuras ejecuciones
+
+    # Paso 3: Instala todas las dependencias del proyecto listadas en package.json
+    - name: Install dependencies
+      run: npm ci
+
+    # Paso 4: Ejecuta los tests definidos en el script "test" del package.json
+    - name: Run tests
+      run: npm test
