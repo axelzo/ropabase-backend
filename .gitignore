@@ -24,3 +24,6 @@ coverage/
 # Peacock extension settings
 .vscode/peacock.*
 .vscode/settings.json
+
+# uploads folder
+.uploads/
