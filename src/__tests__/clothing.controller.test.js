@@ -73,7 +73,7 @@ describe('Clothing Controller', () => {
       // Configura el 'body' de la petición con los datos necesarios para crear una nueva prenda.
       req.body = { name: 'Jeans', category: 'Pants', color: 'Blue' };
       // Simula la existencia de un objeto 'file' en la petición, como si se hubiera subido una imagen.
-      req.file = { path: 'uploads/image.jpg' };
+      req.file = { filename: 'image.jpg' };
       // Define el objeto de la nueva prenda simulada, incluyendo un '_id' y el 'owner' (userId).
       const newItem = { _id: clothingItemId, ...req.body, owner: userId, imageUrl: '/uploads/image.jpg' };
       // Simula que 'ClothingItem.create' resuelve con el objeto de la nueva prenda simulada.
