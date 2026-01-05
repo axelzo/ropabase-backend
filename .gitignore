@@ -25,5 +25,3 @@ coverage/
 .vscode/peacock.*
 .vscode/settings.json
 
-# uploads folder
-.uploads/
