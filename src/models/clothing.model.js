@@ -22,6 +22,10 @@ const clothingItemSchema = new mongoose.Schema({
     type: String,
     required: false,
   },
+  imagePublicId: { // Nuevo campo para almacenar el Public ID de Cloudinary
+    type: String,
+    required: false,
+  },
   owner: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
