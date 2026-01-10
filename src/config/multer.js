@@ -1,31 +1,18 @@
 
 import multer from 'multer';
-import path from 'path';
 
-// Set up storage engine
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    console.log('[MULTER] Guardando archivo en ./uploads/');
-    cb(null, './uploads/');
-  },
-  filename: function (req, file, cb) {
-    const filename = file.fieldname + '-' + Date.now() + path.extname(file.originalname);
-    console.log(`[MULTER] Nombre generado para el archivo: ${filename}`);
-    cb(null, filename);
-  },
-});
+// Set up storage engine to store files in memory
+const storage = multer.memoryStorage();
 
 // Check file type
 function checkFileType(file, cb) {
   // Allowed extensions
   const filetypes = /jpeg|jpg|png|gif/;
-  // Check extension
-  const extname = filetypes.test(path.extname(file.originalname).toLowerCase());
   // Check mime type
   const mimetype = filetypes.test(file.mimetype);
 
   console.log(`[MULTER] Verificando tipo de archivo: ${file.originalname}, mimetype: ${file.mimetype}`);
-  if (mimetype && extname) {
+  if (mimetype && filetypes.test(file.originalname.toLowerCase())) {
     console.log('[MULTER] Archivo permitido.');
     return cb(null, true);
   } else {
