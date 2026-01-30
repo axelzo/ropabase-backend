@@ -18,7 +18,24 @@ import { protect } from '../middlewares/auth.middleware.js';
 // Mockea el modelo 'User' de Mongoose. Todas las llamadas a 'User' serán interceptadas.
 jest.mock('../models/user.model.js');
 // Mockea el modelo 'ClothingItem' de Mongoose. Todas las llamadas a 'ClothingItem' serán interceptadas.
-jest.mock('../models/clothing.model.js');
+jest.mock('../models/clothing.model.js', () => ({
+  __esModule: true, // Important for mocking ES modules
+  default: {
+    find: jest.fn(),
+    create: jest.fn(),
+    findById: jest.fn(),
+    findByIdAndUpdate: jest.fn(),
+    findByIdAndDelete: jest.fn(),
+    schema: {
+      path: jest.fn((fieldName) => {
+        if (fieldName === 'category') {
+          return { enumValues: ['SHIRT', 'PANTS', 'SHOES', 'JACKET', 'ACCESSORY', 'OTHER'] };
+        }
+        return { enumValues: [] };
+      }),
+    },
+  },
+}));
 // Mockea el middleware 'auth.middleware.js'. Todas las funciones exportadas de este módulo serán simuladas.
 jest.mock('../middlewares/auth.middleware.js');
 // Mockea la librería 'bcryptjs'.

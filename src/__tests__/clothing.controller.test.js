@@ -13,7 +13,25 @@ import cloudinary from '../config/cloudinary.js';
 
 // Usa jest.mock para reemplazar las implementaciones reales de los módulos con versiones simuladas.
 // Mockea el modelo 'ClothingItem' de Mongoose. Esto intercepta las interacciones con la colección de prendas.
-jest.mock('../models/clothing.model.js');
+jest.mock('../models/clothing.model.js', () => ({
+  // Mongoose models are typically exported as default
+  __esModule: true, // This property is important for mocking ES modules
+  default: {
+    find: jest.fn(),
+    findById: jest.fn(),
+    create: jest.fn(),
+    findByIdAndUpdate: jest.fn(),
+    findByIdAndDelete: jest.fn(),
+    schema: {
+      path: jest.fn((fieldName) => {
+        if (fieldName === 'category') {
+          return { enumValues: ['SHIRT', 'PANTS', 'SHOES', 'JACKET', 'ACCESSORY', 'OTHER'] };
+        }
+        return { enumValues: [] }; // Default for other paths
+      }),
+    },
+  },
+}));
 // Mockea el modelo 'User' de Mongoose, ya que el controlador interactúa con él para vincular prendas a usuarios.
 jest.mock('../models/user.model.js');
 // Mockea el módulo de Cloudinary para evitar llamadas reales a la API durante las pruebas.
@@ -46,6 +64,7 @@ describe('Clothing Controller', () => {
     req = {
       body: {}, // Simula el cuerpo de la petición HTTP, donde van los datos.
       params: {}, // Simula los parámetros de la URL (e.g., /api/clothing/:id).
+      query: {}, // Inicializa req.query para cada prueba, asegurando un estado limpio
       // Simula que el middleware 'protect' ya ha añadido un usuario autenticado al objeto 'req'.
       user: { userId }, 
       file: undefined, // Simula el objeto de archivo subido por un middleware como Multer.
@@ -61,23 +80,189 @@ describe('Clothing Controller', () => {
     };
   });
 
-  // Inicia un sub-bloque de pruebas para la función 'getClothingItems'.
-  describe('getClothingItems', () => {
-    // Define una prueba: debería devolver todas las prendas de vestir para un usuario autenticado.
-    it('should return all clothing items for a user', async () => {
-      // Define un array de objetos simulados que representan prendas de vestir.
-      const items = [{ _id: clothingItemId, name: 'T-Shirt', owner: userId }];
-      // Simula que la función 'find' del modelo 'ClothingItem' resuelve con el array de prendas simuladas.
-      ClothingItem.find.mockResolvedValue(items);
+      // Inicia un sub-bloque de pruebas para la función 'getClothingItems'.
 
-      // Llama a la función 'getClothingItems' del controlador con los objetos 'req' y 'res' simulados.
-      await getClothingItems(req, res);
+    describe('getClothingItems', () => {
 
-      // Verifica que 'ClothingItem.find' fue llamado con un filtro que busca prendas cuyo 'owner' es el 'userId' simulado.
-      expect(ClothingItem.find).toHaveBeenCalledWith({ owner: userId });
-      // Verifica que el método 'json' de la respuesta fue llamado con el array de prendas simuladas.
-      expect(res.json).toHaveBeenCalledWith(items);
-    });
+      // Define una prueba: debería devolver todas las prendas de vestir para un usuario autenticado.
+
+      it('should return all clothing items for a user', async () => {
+
+        // Define un array de objetos simulados que representan prendas de vestir.
+
+        const items = [{ _id: clothingItemId, name: 'T-Shirt', owner: userId }];
+
+        // Simula que la función 'find' del modelo 'ClothingItem' resuelve con el array de prendas simuladas.
+
+        ClothingItem.find.mockResolvedValue(items);
+
+  
+
+        // Llama a la función 'getClothingItems' del controlador con los objetos 'req' y 'res' simulados.
+
+        await getClothingItems(req, res);
+
+  
+
+        // Verifica que 'ClothingItem.find' fue llamado con un filtro que busca prendas cuyo 'owner' es el 'userId' simulado.
+
+        expect(ClothingItem.find).toHaveBeenCalledWith({ owner: userId });
+
+        // Verifica que el método 'json' de la respuesta fue llamado con el array de prendas simuladas.
+
+        expect(res.json).toHaveBeenCalledWith(items);
+
+      });
+
+  
+
+      // Sub-bloque de pruebas para la funcionalidad de filtrado
+
+      describe('filtering', () => {
+
+        const mockItems = [
+
+          { _id: 'item1', name: 'Red T-Shirt', category: 'SHIRT', color: 'Red', owner: userId },
+
+          { _id: 'item2', name: 'Blue Jeans', category: 'PANTS', color: 'Blue', owner: userId },
+
+          { _id: 'item3', name: 'Black Jacket', category: 'JACKET', color: 'Black', owner: userId },
+
+          { _id: 'item4', name: 'Green Shirt', category: 'SHIRT', color: 'Green', owner: userId },
+
+        ];
+
+  
+
+        beforeEach(() => {
+
+          // Reinicia req.query antes de cada prueba de filtrado
+
+          req.query = {}; 
+
+          // Mockea la respuesta por defecto de find
+
+          ClothingItem.find.mockResolvedValue(mockItems);
+
+        });
+
+  
+
+        it('should return all items when no filters are provided', async () => {
+
+          await getClothingItems(req, res);
+
+          expect(ClothingItem.find).toHaveBeenCalledWith({ owner: userId });
+
+          expect(res.json).toHaveBeenCalledWith(mockItems);
+
+        });
+
+  
+
+        it('should filter by valid category', async () => {
+
+          req.query.category = 'SHIRT';
+
+          // Mockear una respuesta específica para este filtro
+
+          ClothingItem.find.mockResolvedValue([mockItems[0], mockItems[3]]); 
+
+          await getClothingItems(req, res);
+
+          expect(ClothingItem.find).toHaveBeenCalledWith({ owner: userId, category: 'SHIRT' });
+
+          expect(res.json).toHaveBeenCalledWith([mockItems[0], mockItems[3]]);
+
+        });
+
+  
+
+        it('should ignore invalid category filter', async () => {
+
+          req.query.category = 'INVALID_CATEGORY';
+
+          await getClothingItems(req, res);
+
+          // Debería ignorar la categoría inválida y llamar solo con el owner
+
+          expect(ClothingItem.find).toHaveBeenCalledWith({ owner: userId });
+
+          expect(res.json).toHaveBeenCalledWith(mockItems); // Devuelve todos los items mockeados por defecto
+
+        });
+
+  
+
+        it('should filter by name using case-insensitive partial match', async () => {
+
+          req.query.name = 'shirt';
+
+          ClothingItem.find.mockResolvedValue([mockItems[0], mockItems[3]]); 
+
+          await getClothingItems(req, res);
+
+          expect(ClothingItem.find).toHaveBeenCalledWith({ owner: userId, name: { '$regex': 'shirt', '$options': 'i' } });
+
+          expect(res.json).toHaveBeenCalledWith([mockItems[0], mockItems[3]]);
+
+        });
+
+  
+
+        it('should filter by color with exact match', async () => {
+
+          req.query.color = 'Blue';
+
+          ClothingItem.find.mockResolvedValue([mockItems[1]]); 
+
+          await getClothingItems(req, res);
+
+          expect(ClothingItem.find).toHaveBeenCalledWith({ owner: userId, color: 'Blue' });
+
+          expect(res.json).toHaveBeenCalledWith([mockItems[1]]);
+
+        });
+
+  
+
+        it('should apply multiple filters', async () => {
+
+          req.query.category = 'PANTS';
+
+          req.query.color = 'Blue';
+
+          ClothingItem.find.mockResolvedValue([mockItems[1]]); 
+
+          await getClothingItems(req, res);
+
+          expect(ClothingItem.find).toHaveBeenCalledWith({ owner: userId, category: 'PANTS', color: 'Blue' });
+
+          expect(res.json).toHaveBeenCalledWith([mockItems[1]]);
+
+        });
+
+  
+
+        it('should ignore non-whitelisted filters (NoSQL injection attempt)', async () => {
+
+          req.query.nonExistentField = 'someValue';
+
+          req.query['$where'] = '1=1'; // Simula intento de inyección NoSQL
+
+          await getClothingItems(req, res);
+
+          // Solo debería llamar con el owner, ignorando los campos no permitidos
+
+          expect(ClothingItem.find).toHaveBeenCalledWith({ owner: userId });
+
+          expect(res.json).toHaveBeenCalledWith(mockItems);
+
+        });
+
+      });
+
+  
   });
 
   // Inicia un sub-bloque de pruebas para la función 'createClothingItem'.
@@ -86,7 +271,6 @@ describe('Clothing Controller', () => {
     it('should create a new item with an image uploaded to Cloudinary', async () => {
       // Configura el 'body' de la petición.
       req.body = { name: 'Jeans', category: 'Pants', color: 'Blue' };
-<<<<<<< HEAD
       // Simula un archivo subido con un buffer de datos.
       req.file = { buffer: Buffer.from('mockImageData') };
       // Define el objeto de la nueva prenda con la URL simulada de Cloudinary y el Public ID.
@@ -98,15 +282,9 @@ describe('Clothing Controller', () => {
         imagePublicId: 'mock_public_id' // Incluye el Public ID esperado
       };
       
-      // Simula la creación exitosa del ítem en la base de datos.
-=======
-      // Simula la existencia de un objeto 'file' en la petición, como si se hubiera subido una imagen.
-      req.file = { path: 'uploads/image.jpg' };
-      // Define el objeto de la nueva prenda simulada, incluyendo un '_id' y el 'owner' (userId).
-      const newItem = { _id: clothingItemId, ...req.body, owner: userId, imageUrl: '/uploads/image.jpg' };
-      // Simula que 'ClothingItem.create' resuelve con el objeto de la nueva prenda simulada.
->>>>>>> ffbfab1 (SCRUM-42: normalize the upload image path)
-      ClothingItem.create.mockResolvedValue(newItem);
+                  // Simula la creación exitosa del ítem en la base de datos.
+      
+                  ClothingItem.create.mockResolvedValue(newItem);
       // Simula la actualización exitosa del usuario.
       User.findByIdAndUpdate.mockResolvedValue({});
 
