@@ -4,14 +4,68 @@ import User from '../models/user.model.js';
 // Importa la configuración de Cloudinary para la subida de imágenes.
 import cloudinary from '../config/cloudinary.js';
 
-// @desc    Get all clothing items for a user
+// @desc    Get all clothing items for a user, with filtering
 // @route   GET /api/clothing
 // @access  Private
 export const getClothingItems = async (req, res) => {
   console.log('[CLOTHING] Petición para obtener prendas del usuario:', req.user.userId);
   try {
-    // CAMBIO 2: Usar ClothingItem.find y filtrar por el campo 'owner'.
-    const clothingItems = await ClothingItem.find({ owner: req.user.userId });
+    const { query } = req; // Obtenemos los parámetros de consulta de la petición (ej. ?category=SHIRT)
+    
+    // Filtro base: siempre restringir por el propietario (dueño) de la prenda.
+    const filters = { owner: req.user.userId };
+    // Lista blanca de las claves de filtro permitidas. Esto previene NoSQL Injection y filtrado por campos no deseados.
+    const allowedFilters = ['name', 'category', 'color', 'brand'];
+    // Campos que permiten búsqueda parcial con regex (ej. buscar "cam" encuentra "camisa").
+    const textSearchFields = ['name', 'brand'];
+    // Valores válidos del enum para 'category' directamente del esquema del modelo.
+    const categoryEnumValues = ClothingItem.schema.path('category').enumValues;
+
+    // Valida que el valor recibido del query param sea un string no vacío.
+    // Esto previene inyecciones donde el atacante envía objetos o arrays en lugar de strings.
+    const isValidParam = (value) => typeof value === 'string' && value.length > 0;
+
+    // Construye el valor del filtro de MongoDB según el tipo de campo.
+    // Retorna null si el valor no es válido (ej. categoría inexistente).
+    const buildFilterValue = (key, value) => {
+      // Si el campo es de texto libre (name o brand), retorna un regex para búsqueda parcial e insensible a mayúsculas.
+      if (textSearchFields.includes(key)) {
+        return { $regex: value, $options: 'i' };
+      }
+
+      // Si el campo NO es 'category', retorna el valor tal cual para coincidencia exacta (ej. color).
+      if (key !== 'category') {
+        return value;
+      }
+
+      // Para 'category', normaliza a mayúsculas para comparar con el enum del esquema.
+      const upperValue = value.toUpperCase();
+
+      // Si el valor no existe en el enum, lo descarta y registra un aviso en consola.
+      if (!categoryEnumValues.includes(upperValue)) {
+        console.log(`[CLOTHING] Invalid category filter value ignored: ${value}`);
+        return null;
+      }
+
+      // Retorna el valor válido de la categoría ya normalizado.
+      return upperValue;
+    };
+
+    // Filtra solo los query params que están en la lista blanca y tienen un valor válido.
+    const validKeys = allowedFilters.filter((key) => isValidParam(query[key]));
+
+    // Transforma cada clave válida en un par [clave, valorFiltrado] para construir el objeto de filtros.
+    const filterEntries = validKeys.map((key) => [key, buildFilterValue(key, query[key])]);
+
+    // Elimina los pares donde el valor es null (ej. categoría inválida).
+    const validEntries = filterEntries.filter(([, value]) => value !== null);
+
+    // Convierte el array de pares [clave, valor] en un objeto y lo combina con el filtro base (owner).
+    Object.assign(filters, Object.fromEntries(validEntries));
+    
+    console.log('[CLOTHING] Aplicando filtros:', filters);
+    // Realizamos la búsqueda en la base de datos utilizando el objeto de filtros construido.
+    const clothingItems = await ClothingItem.find(filters);
     console.log('[CLOTHING] Prendas encontradas:', clothingItems.length);
     res.json(clothingItems);
   } catch (error) {

@@ -42,12 +42,20 @@ describe('Clothing Controller', () => {
   beforeEach(() => {
     // Limpia el estado de todos los mocks, restableciendo sus contadores de llamadas y valores simulados.
     jest.clearAllMocks();
+    // Mockea ClothingItem.schema para que el controlador pueda leer los enumValues
+    // sin depender de la instancia real de Mongoose (que no existe en tests).
+    ClothingItem.schema = {
+      path: jest.fn().mockReturnValue({
+        enumValues: ['SHIRT', 'PANTS', 'SHOES', 'JACKET', 'ACCESSORY', 'OTHER'],
+      }),
+    };
     // Inicializa el objeto 'req' (request) con propiedades que simulan una petición HTTP.
     req = {
       body: {}, // Simula el cuerpo de la petición HTTP, donde van los datos.
       params: {}, // Simula los parámetros de la URL (e.g., /api/clothing/:id).
       // Simula que el middleware 'protect' ya ha añadido un usuario autenticado al objeto 'req'.
-      user: { userId }, 
+      user: { userId },
+      query: {}, // Simula los query params de la URL (e.g., ?category=SHIRT). Requerido por getClothingItems.
       file: undefined, // Simula el objeto de archivo subido por un middleware como Multer.
     };
     // Inicializa el objeto 'res' (response) con funciones simuladas de Jest para capturar las respuestas.
