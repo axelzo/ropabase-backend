@@ -33,6 +33,14 @@ describe('API Routes Integration Tests', () => {
     // Restablece el estado de todos los mocks a su estado inicial antes de cada prueba.
     jest.clearAllMocks();
 
+    // Mockea ClothingItem.schema para que el controlador pueda leer los enumValues
+    // sin depender de la instancia real de Mongoose (que no existe en tests).
+    ClothingItem.schema = {
+      path: jest.fn().mockReturnValue({
+        enumValues: ['SHIRT', 'PANTS', 'SHOES', 'JACKET', 'ACCESSORY', 'OTHER'],
+      }),
+    };
+
     // Define la implementación por defecto para el mock del middleware 'protect'.
     // Esto simula que un usuario siempre está autenticado por defecto, a menos que un test lo sobreescriba.
     protect.mockImplementation((req, res, next) => {
