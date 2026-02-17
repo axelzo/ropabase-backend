@@ -97,7 +97,11 @@ export const createClothingItem = async (req, res) => {
         // Sube el buffer de la imagen a Cloudinary.
         const uploadResult = await new Promise((resolve, reject) => {
           const uploadStream = cloudinary.uploader.upload_stream(
-            { resource_type: 'image' },
+            {
+              resource_type: 'image',
+              background_removal: 'cloudinary_ai',
+              transformation: [{ background: '#FFFFFF' }],
+            },
             (error, result) => {
               if (error) return reject(error);
               resolve(result);
@@ -105,7 +109,7 @@ export const createClothingItem = async (req, res) => {
           );
           uploadStream.end(req.file.buffer);
         });
-  
+
         // Guarda la URL segura de la imagen subida y su ID público.
         imageUrl = uploadResult.secure_url;
         imagePublicId = uploadResult.public_id; // Guarda el public_id de Cloudinary
@@ -168,7 +172,11 @@ export const updateClothingItem = async (req, res) => {
       // Sube el buffer de la nueva imagen a Cloudinary.
       const uploadResult = await new Promise((resolve, reject) => {
         const uploadStream = cloudinary.uploader.upload_stream(
-          { resource_type: 'image' },
+          {
+            resource_type: 'image',
+            background_removal: 'cloudinary_ai',
+            transformation: [{ background: '#FFFFFF' }],
+          },
           (error, result) => {
             if (error) return reject(error);
             resolve(result);
