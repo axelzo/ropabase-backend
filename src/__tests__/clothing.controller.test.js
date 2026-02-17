@@ -97,14 +97,14 @@ describe('Clothing Controller', () => {
       // Simula un archivo subido con un buffer de datos.
       req.file = { buffer: Buffer.from('mockImageData') };
       // Define el objeto de la nueva prenda con la URL simulada de Cloudinary y el Public ID.
-      const newItem = { 
-        _id: clothingItemId, 
-        ...req.body, 
-        owner: userId, 
+      const newItem = {
+        _id: clothingItemId,
+        ...req.body,
+        owner: userId,
         imageUrl: 'http://mock.cloudinary.com/image.jpg',
-        imagePublicId: 'mock_public_id' // Incluye el Public ID esperado
+        imagePublicId: 'mock_public_id'
       };
-      
+
       // Simula la creación exitosa del ítem en la base de datos.
       ClothingItem.create.mockResolvedValue(newItem);
       // Simula la actualización exitosa del usuario.
