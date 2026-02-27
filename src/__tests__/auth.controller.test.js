@@ -81,6 +81,21 @@ describe('Auth Controller', () => {
       expect(res.json).toHaveBeenCalledWith({ message: 'Email already exists' });
     });
 
+    it('should handle database errors during registration', async () => {
+      req.body = { email: 'test@example.com', password: 'password123' };
+
+      // Simulate a generic database error (not 11000)
+      const dbError = new Error('Database connection failed');
+      dbError.name = 'MongoNetworkError';
+      User.create.mockRejectedValue(dbError);
+
+      await register(req, res);
+
+      // Should call handleDatabaseError which returns 500
+      expect(res.status).toHaveBeenCalledWith(500);
+      expect(res.json).toHaveBeenCalled();
+    });
+
     // Define una prueba individual: verifica que se devuelve un error 400 si no se proporcionan email o contraseña.
     it('should return 400 if email or password are not provided', async () => {
       // Configura el 'body' del objeto 'req' sin los campos 'email' y 'password' requeridos.
@@ -92,6 +107,24 @@ describe('Auth Controller', () => {
       // Verifica que la respuesta tiene el código de estado HTTP 400 (Bad Request).
       expect(res.status).toHaveBeenCalledWith(400);
       // Verifica que el método 'json' de la respuesta fue llamado con el mensaje de error de campos requeridos.
+      expect(res.json).toHaveBeenCalledWith({ message: 'Email and password are required' });
+    });
+
+    it('should return 400 if email is missing', async () => {
+      req.body = { password: 'password123', name: 'test' };
+
+      await register(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(res.json).toHaveBeenCalledWith({ message: 'Email and password are required' });
+    });
+
+    it('should return 400 if password is missing', async () => {
+      req.body = { email: 'test@example.com', name: 'test' };
+
+      await register(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(400);
       expect(res.json).toHaveBeenCalledWith({ message: 'Email and password are required' });
     });
   });
@@ -138,6 +171,48 @@ describe('Auth Controller', () => {
       expect(res.status).toHaveBeenCalledWith(401);
       // Verifica que el método 'json' de la respuesta fue llamado con el mensaje de credenciales inválidas.
       expect(res.json).toHaveBeenCalledWith({ message: 'Invalid credentials' });
+    });
+
+    it('should handle database errors during login', async () => {
+      req.body = { email: 'test@example.com', password: 'password123' };
+
+      // Simulate a database error
+      const dbError = new Error('Database timeout');
+      dbError.name = 'MongoTimeoutError';
+      User.findOne.mockRejectedValue(dbError);
+
+      await login(req, res);
+
+      // Should call handleDatabaseError which returns 500
+      expect(res.status).toHaveBeenCalledWith(500);
+      expect(res.json).toHaveBeenCalled();
+    });
+
+    it('should return 400 if email or password are missing in login', async () => {
+      req.body = { email: 'test@example.com' }; // missing password
+
+      await login(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(res.json).toHaveBeenCalledWith({ message: 'Email and password are required' });
+    });
+
+    it('should return 400 if email is missing in login', async () => {
+      req.body = { password: 'password123' }; // missing email
+
+      await login(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(res.json).toHaveBeenCalledWith({ message: 'Email and password are required' });
+    });
+
+    it('should return 400 if both email and password are missing in login', async () => {
+      req.body = {}; // missing both
+
+      await login(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(res.json).toHaveBeenCalledWith({ message: 'Email and password are required' });
     });
 
     // Define una prueba individual: verifica que se devuelve un error 401 si la contraseña es incorrecta.

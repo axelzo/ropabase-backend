@@ -22,7 +22,14 @@ const config: Config = {
   collectCoverage: true,
 
   // An array of glob patterns indicating a set of files for which coverage information should be collected
-  // collectCoverageFrom: undefined,
+  collectCoverageFrom: [
+    'src/**/*.js',
+    '!src/__tests__/**',
+    '!src/**/*.test.js',
+    '!src/index.js',
+    '!src/config/database.js',
+    '!src/helpers/validation.helpers.js',
+  ],
 
   // The directory where Jest should output its coverage files
   coverageDirectory: "coverage",
@@ -34,7 +41,7 @@ const config: Config = {
   
 
   // Indicates which provider should be used to instrument code for coverage
-  coverageProvider: "v8",
+  coverageProvider: "babel",
 
   // A list of reporter names that Jest uses when writing coverage reports
   // coverageReporters: [
@@ -47,10 +54,10 @@ const config: Config = {
   // An object that configures minimum threshold enforcement for coverage results
   coverageThreshold: {
   global: {
-    branches: 50,
-    functions: 50,
-    lines: 50,
-    statements: 50
+    branches:85,
+    functions: 85,
+    lines: 85,
+    statements: 85
   }
 },
 
