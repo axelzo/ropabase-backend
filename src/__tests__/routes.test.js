@@ -94,6 +94,14 @@ describe('API Routes Integration Tests', () => {
     });
   });
 
+  describe('Root Route', () => {
+    it('GET / - should return API status message', async () => {
+      const response = await request(app).get('/');
+      expect(response.statusCode).toBe(200);
+      expect(response.text).toBe('Wardrobe API is running!');
+    });
+  });
+
   // Inicia un sub-bloque de pruebas para las rutas de prendas de vestir.
   describe('Clothing Routes', () => {
     // Prueba para GET /api/clothing: debería devolver 401 si no está autenticado.
@@ -149,6 +157,41 @@ describe('API Routes Integration Tests', () => {
       expect(response.statusCode).toBe(201);
       // Verifica que la respuesta JSON coincide con la prenda creada simulada.
       expect(response.body).toEqual(createdItem);
+    });
+
+    it('PUT /api/clothing/:id - should update an item if authenticated', async () => {
+      const mockItem = {
+        _id: 'mockItemId',
+        owner: { toString: () => 'mockUserId' },
+        imagePublicId: null,
+      };
+      const updatedItem = { _id: 'mockItemId', owner: 'mockUserId', name: 'Updated Jeans', category: 'Pants', color: 'Black' };
+
+      ClothingItem.findById.mockResolvedValue(mockItem);
+      ClothingItem.findByIdAndUpdate.mockResolvedValue(updatedItem);
+
+      const response = await request(app)
+        .put('/api/clothing/mockItemId')
+        .send({ name: 'Updated Jeans', category: 'Pants', color: 'Black' });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.body).toEqual(updatedItem);
+    });
+
+    it('DELETE /api/clothing/:id - should delete an item if authenticated', async () => {
+      const mockItem = {
+        _id: 'mockItemId',
+        owner: { toString: () => 'mockUserId' },
+        imagePublicId: null,
+      };
+
+      ClothingItem.findById.mockResolvedValue(mockItem);
+      ClothingItem.findByIdAndDelete.mockResolvedValue({});
+      User.updateOne.mockResolvedValue({});
+
+      const response = await request(app).delete('/api/clothing/mockItemId');
+
+      expect(response.statusCode).toBe(204);
     });
   });
 });

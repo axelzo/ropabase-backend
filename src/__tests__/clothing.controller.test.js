@@ -86,6 +86,81 @@ describe('Clothing Controller', () => {
       // Verifica que el método 'json' de la respuesta fue llamado con el array de prendas simuladas.
       expect(res.json).toHaveBeenCalledWith(items);
     });
+
+    it('should handle errors when fetching items', async () => {
+      const error = new Error('Database error');
+      ClothingItem.find.mockRejectedValue(error);
+
+      await getClothingItems(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(500);
+      expect(res.json).toHaveBeenCalledWith({ message: 'Internal server error' });
+    });
+
+    it('should filter by text search field (name)', async () => {
+      req.query = { name: 'shirt' };
+      const mockItems = [{ _id: '1', name: 'T-Shirt', owner: userId }];
+      ClothingItem.find.mockResolvedValue(mockItems);
+
+      await getClothingItems(req, res);
+
+      expect(ClothingItem.find).toHaveBeenCalledWith(
+        expect.objectContaining({
+          owner: userId,
+          name: { $regex: 'shirt', $options: 'i' }
+        })
+      );
+      expect(res.json).toHaveBeenCalledWith(mockItems);
+    });
+
+    it('should filter by exact match field (color)', async () => {
+      req.query = { color: 'Blue' };
+      const mockItems = [{ _id: '1', color: 'Blue', owner: userId }];
+      ClothingItem.find.mockResolvedValue(mockItems);
+
+      await getClothingItems(req, res);
+
+      expect(ClothingItem.find).toHaveBeenCalledWith(
+        expect.objectContaining({
+          owner: userId,
+          color: 'Blue'
+        })
+      );
+      expect(res.json).toHaveBeenCalledWith(mockItems);
+    });
+
+    it('should filter by valid category (normalized to uppercase)', async () => {
+      req.query = { category: 'shirt' };
+      const mockItems = [{ _id: '1', category: 'SHIRT', owner: userId }];
+      ClothingItem.find.mockResolvedValue(mockItems);
+
+      await getClothingItems(req, res);
+
+      expect(ClothingItem.find).toHaveBeenCalledWith(
+        expect.objectContaining({
+          owner: userId,
+          category: 'SHIRT'
+        })
+      );
+      expect(res.json).toHaveBeenCalledWith(mockItems);
+    });
+
+    it('should ignore invalid category filter', async () => {
+      const consoleLogSpy = jest.spyOn(console, 'log').mockImplementation();
+      req.query = { category: 'invalid_category' };
+      const mockItems = [{ _id: '1', owner: userId }];
+      ClothingItem.find.mockResolvedValue(mockItems);
+
+      await getClothingItems(req, res);
+
+      expect(consoleLogSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Invalid category filter value ignored')
+      );
+      expect(ClothingItem.find).toHaveBeenCalledWith({ owner: userId });
+      expect(res.json).toHaveBeenCalledWith(mockItems);
+
+      consoleLogSpy.mockRestore();
+    });
   });
 
   // Inicia un sub-bloque de pruebas para la función 'createClothingItem'.
@@ -166,6 +241,17 @@ describe('Clothing Controller', () => {
       expect(res.status).toHaveBeenCalledWith(400);
       // Verifica que el método 'json' de la respuesta fue llamado con el mensaje de error esperado.
       expect(res.json).toHaveBeenCalledWith({ message: 'Name, category, and color are required' });
+    });
+
+    it('should handle database errors during item creation', async () => {
+      req.body = { name: 'Jeans', category: 'Pants', color: 'Blue' };
+      const error = new Error('Database error');
+      ClothingItem.create.mockRejectedValue(error);
+
+      await createClothingItem(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(500);
+      expect(res.json).toHaveBeenCalledWith({ message: 'Internal server error' });
     });
   });
 
@@ -276,6 +362,18 @@ describe('Clothing Controller', () => {
       // Verifica que el método 'json' de la respuesta fue llamado con el mensaje de error esperado.
       expect(res.json).toHaveBeenCalledWith({ message: 'Clothing item not found' });
     });
+
+    it('should handle database errors during update', async () => {
+      req.params.id = clothingItemId;
+      req.body = { name: 'Updated' };
+      const error = new Error('Database error');
+      ClothingItem.findById.mockRejectedValue(error);
+
+      await updateClothingItem(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(500);
+      expect(res.json).toHaveBeenCalledWith({ message: 'Internal server error' });
+    });
   });
 
   // Inicia un sub-bloque de pruebas para la función 'deleteClothingItem'.
@@ -354,6 +452,17 @@ describe('Clothing Controller', () => {
       expect(res.status).toHaveBeenCalledWith(403);
       // Verifica que el método 'json' de la respuesta fue llamado con el mensaje de error esperado.
       expect(res.json).toHaveBeenCalledWith({ message: 'User not authorized to delete this item' });
+    });
+
+    it('should handle database errors during delete', async () => {
+      req.params.id = clothingItemId;
+      const error = new Error('Database error');
+      ClothingItem.findById.mockRejectedValue(error);
+
+      await deleteClothingItem(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(500);
+      expect(res.json).toHaveBeenCalledWith({ message: 'Internal server error' });
     });
   });
 });

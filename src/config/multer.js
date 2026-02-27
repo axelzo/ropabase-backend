@@ -5,7 +5,7 @@ import multer from 'multer';
 const storage = multer.memoryStorage();
 
 // Check file type
-function checkFileType(file, cb) {
+export function checkFileType(file, cb) {
   // Allowed extensions
   const filetypes = /jpeg|jpg|png|gif/;
   // Check mime type
