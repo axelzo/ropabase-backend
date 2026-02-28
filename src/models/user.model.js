@@ -29,6 +29,13 @@ const userSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'ClothingItem',
   }],
+  // Hash SHA-256 del refresh token activo.
+  // select: false → no se retorna en queries por defecto (seguridad).
+  refreshToken: {
+    type: String,
+    required: false,
+    select: false,
+  },
 }, { timestamps: true });
 
 const User = mongoose.model('User', userSchema);

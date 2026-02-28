@@ -1,8 +1,10 @@
 import jwt from 'jsonwebtoken';
 
 export const protect = (req, res, next) => {
-  const token = req.headers.authorization?.split(' ')[1]; // Bearer TOKEN
-  console.log('[MIDDLEWARE] Verificando token:', token);
+  // Lee el access token desde la cookie HTTP-only, NO desde Authorization header.
+  // Las cookies HTTP-only son inaccesibles al JS del navegador → protección contra XSS.
+  const token = req.cookies?.accessToken;
+  console.log('[MIDDLEWARE] Verificando token desde cookie:', token ? 'presente' : 'ausente');
 
   if (!token) {
     console.log('[MIDDLEWARE] No se proporcionó token.');
