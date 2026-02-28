@@ -1,5 +1,6 @@
 import express from 'express';
 import cors from 'cors';
+import cookieParser from 'cookie-parser';
 import dotenv from 'dotenv';
 import authRoutes from './routes/auth.routes.js';
 import clothingRoutes from './routes/clothing.routes.js';
@@ -17,9 +18,15 @@ app.use((req, res, next) => {
   next();
 });
 console.log('[SERVER] Middleware CORS activado.');
-app.use(cors());
+// credentials: true permite envío de cookies cross-origin desde el frontend
+app.use(cors({
+  origin: process.env.FRONTEND_URL || 'http://localhost:3002',
+  credentials: true,
+}));
 console.log('[SERVER] Middleware JSON activado.');
 app.use(express.json());
+// cookieParser convierte el header Cookie en req.cookies legible por los middlewares
+app.use(cookieParser());
 
 // Routes
 console.log('[SERVER] Rutas /api/auth activadas.');

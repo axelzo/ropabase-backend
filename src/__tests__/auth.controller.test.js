@@ -1,112 +1,85 @@
-// Importa las funciones del controlador de autenticación que vamos a probar: 'register' y 'login'.
-import { register, login } from '../controllers/auth.controller.js';
-// Importa el modelo 'User' de Mongoose, que el controlador utiliza para interactuar con la base de datos de usuarios.
+import crypto from 'crypto';
+import { register, login, refresh, logout } from '../controllers/auth.controller.js';
 import User from '../models/user.model.js';
-// Importa la librería 'bcryptjs', utilizada por el controlador para hashear y comparar contraseñas.
 import bcrypt from 'bcryptjs';
-// Importa la librería 'jsonwebtoken', utilizada por el controlador para firmar y verificar tokens de autenticación.
 import jwt from 'jsonwebtoken';
 
-// Mockea el módulo del modelo 'User'. Esto significa que cualquier operación sobre 'User' (como 'create', 'findOne')
-// dentro del controlador se ejecutará sobre una versión simulada, sin tocar la base de datos real.
 jest.mock('../models/user.model.js');
-// Mockea la librería 'bcryptjs'. Las llamadas a 'bcrypt.hash' y 'bcrypt.compare' devolverán valores predefinidos por el mock.
 jest.mock('bcryptjs');
-// Mockea la librería 'jsonwebtoken'. Las llamadas a 'jwt.sign' y 'jwt.verify' devolverán valores predefinidos por el mock.
 jest.mock('jsonwebtoken');
 
-// Inicia un bloque de pruebas para el "Auth Controller". Esto agrupa pruebas relacionadas con el controlador de autenticación.
+// NO mockeamos crypto porque Mongoose lo usa internamente.
+// En su lugar, calculamos el hash real con SHA-256 para usarlo en los mocks de DB.
+const hashToken = (token) => crypto.createHash('sha256').update(token).digest('hex');
+
 describe('Auth Controller', () => {
-  // Declara variables para los objetos de solicitud (request) y respuesta (response) de Express.
-  // Estas variables se reasignarán con objetos simulados antes de cada prueba.
   let req, res;
 
-  // La función 'beforeEach' se ejecuta antes de cada prueba ('it') en este bloque 'describe'.
   beforeEach(() => {
-    // Restablece el estado de todos los mocks (contadores de llamadas, valores devueltos) a su estado inicial.
     jest.clearAllMocks();
 
-    // Inicializa el objeto 'req' (request) con un cuerpo vacío, que simula el cuerpo de una petición HTTP.
     req = {
       body: {},
+      cookies: {},
     };
-    // Inicializa el objeto 'res' (response) con funciones simuladas para Jest.
+
+    // El mock de res incluye cookie y clearCookie porque el nuevo flujo
+    // usa cookies HTTP-only en lugar de retornar tokens en el body.
     res = {
-      // Mockea el método 'status' de la respuesta. 'mockReturnThis()' permite encadenar métodos (e.g., res.status(200).json()).
       status: jest.fn().mockReturnThis(),
-      // Mockea el método 'json' de la respuesta, que se usa para enviar datos JSON al cliente.
       json: jest.fn(),
+      cookie: jest.fn().mockReturnThis(),
+      clearCookie: jest.fn().mockReturnThis(),
     };
   });
 
-  // Inicia un sub-bloque de pruebas para la función 'register' del controlador.
+  // -------------------------------------------------------------------------
+  // register
+  // -------------------------------------------------------------------------
   describe('register', () => {
-    // Define una prueba individual: verifica que se puede crear un usuario exitosamente.
     it('should create a user successfully', async () => {
-      // Configura el 'body' del objeto 'req' con los datos de registro de un usuario.
       req.body = { name: 'test', email: 'test@example.com', password: 'password123' };
-      
-      // Simula que 'bcrypt.hash' siempre resuelve con una contraseña hasheada predefinida.
       bcrypt.hash.mockResolvedValue('hashedPassword');
-      // Simula que 'User.create' (la función mockeada de Mongoose) resuelve exitosamente, devolviendo un objeto de usuario.
-      // El objeto incluye un '_id' simulado (típico de MongoDB) y los datos del cuerpo de la petición.
       User.create.mockResolvedValue({ _id: 'mockUserId', ...req.body });
 
-      // Llama a la función 'register' del controlador con los objetos 'req' y 'res' simulados.
       await register(req, res);
 
-      // Verifica que la función 'User.create' del modelo (mockeada) fue llamada.
       expect(User.create).toHaveBeenCalled();
-      // Verifica que el método 'status' de la respuesta fue llamado con el código HTTP 201 (Created).
       expect(res.status).toHaveBeenCalledWith(201);
-      // Verifica que el método 'json' de la respuesta fue llamado con un objeto que contiene un mensaje de éxito y el 'userId' simulado.
-      expect(res.json).toHaveBeenCalledWith({ message: 'User created successfully', userId: 'mockUserId' });
+      expect(res.json).toHaveBeenCalledWith({
+        message: 'User created successfully',
+        userId: 'mockUserId',
+      });
     });
 
-    // Define una prueba individual: verifica que se devuelve un error 409 si el email ya existe.
     it('should return 409 if email already exists', async () => {
-      // Configura el 'body' del objeto 'req' con un email que ya debería existir.
       req.body = { email: 'test@example.com', password: 'password123' };
-
-      // Simula que 'User.create' (mockeado) rechaza la operación con un error de código 11000,
-      // que en Mongoose indica una clave única duplicada (email ya existe).
       User.create.mockRejectedValue({ code: 11000 });
 
-      // Llama a la función 'register'.
       await register(req, res);
 
-      // Verifica que la respuesta tiene el código de estado HTTP 409 (Conflict).
       expect(res.status).toHaveBeenCalledWith(409);
-      // Verifica que el método 'json' de la respuesta fue llamado con el mensaje de error esperado.
       expect(res.json).toHaveBeenCalledWith({ message: 'Email already exists' });
     });
 
-    it('should handle database errors during registration', async () => {
+    it('should return 500 on database error', async () => {
       req.body = { email: 'test@example.com', password: 'password123' };
-
-      // Simulate a generic database error (not 11000)
       const dbError = new Error('Database connection failed');
       dbError.name = 'MongoNetworkError';
       User.create.mockRejectedValue(dbError);
 
       await register(req, res);
 
-      // Should call handleDatabaseError which returns 500
       expect(res.status).toHaveBeenCalledWith(500);
       expect(res.json).toHaveBeenCalled();
     });
 
-    // Define una prueba individual: verifica que se devuelve un error 400 si no se proporcionan email o contraseña.
-    it('should return 400 if email or password are not provided', async () => {
-      // Configura el 'body' del objeto 'req' sin los campos 'email' y 'password' requeridos.
+    it('should return 400 if email and password are not provided', async () => {
       req.body = { name: 'test' };
 
-      // Llama a la función 'register'.
       await register(req, res);
 
-      // Verifica que la respuesta tiene el código de estado HTTP 400 (Bad Request).
       expect(res.status).toHaveBeenCalledWith(400);
-      // Verifica que el método 'json' de la respuesta fue llamado con el mensaje de error de campos requeridos.
       expect(res.json).toHaveBeenCalledWith({ message: 'Email and password are required' });
     });
 
@@ -129,111 +102,227 @@ describe('Auth Controller', () => {
     });
   });
 
-  // Inicia un sub-bloque de pruebas para la función 'login' del controlador.
+  // -------------------------------------------------------------------------
+  // login
+  // -------------------------------------------------------------------------
   describe('login', () => {
-    // Define una prueba individual: verifica que un usuario puede iniciar sesión y recibir un token.
-    it('should login a user and return a token', async () => {
-      // Configura el 'body' del objeto 'req' con las credenciales de login.
+    it('should login and set access + refresh cookies HTTP-only', async () => {
       req.body = { email: 'test@example.com', password: 'password123' };
-      // Crea un objeto 'user' simulado que sería devuelto por la base de datos, incluyendo su '_id' y contraseña hasheada.
       const user = { _id: 'mockUserId', email: 'test@example.com', password: 'hashedPassword' };
 
-      // Simula que 'User.findOne' (mockeado) encuentra al usuario por su email.
       User.findOne.mockResolvedValue(user);
-      // Simula que 'bcrypt.compare' (mockeado) confirma que la contraseña proporcionada es correcta.
       bcrypt.compare.mockResolvedValue(true);
-      // Simula que 'jwt.sign' (mockeado) devuelve un token de autenticación falso.
-      jwt.sign.mockReturnValue('fakeToken');
+      // jwt.sign se llama 2 veces: access token (15min) y refresh token (7d)
+      jwt.sign
+        .mockReturnValueOnce('fakeAccessToken')
+        .mockReturnValueOnce('fakeRefreshToken');
+      User.findByIdAndUpdate.mockResolvedValue({});
 
-      // Llama a la función 'login' del controlador.
       await login(req, res);
 
-      // Verifica que 'User.findOne' fue llamado con un objeto de filtro que busca por 'email'.
       expect(User.findOne).toHaveBeenCalledWith({ email: req.body.email });
-      // Verifica que 'bcrypt.compare' fue llamado con la contraseña del request y la contraseña hasheada del usuario simulado.
       expect(bcrypt.compare).toHaveBeenCalledWith(req.body.password, user.password);
-      // Verifica que el método 'json' de la respuesta fue llamado con un objeto que contiene el token falso.
-      expect(res.json).toHaveBeenCalledWith({ token: 'fakeToken' });
+      // El hash SHA-256 del refresh token se guarda en DB (no el token en texto plano)
+      expect(User.findByIdAndUpdate).toHaveBeenCalledWith(
+        'mockUserId',
+        { refreshToken: expect.any(String) }
+      );
+      // Las dos cookies se emiten con httpOnly: true
+      expect(res.cookie).toHaveBeenCalledWith(
+        'accessToken',
+        'fakeAccessToken',
+        expect.objectContaining({ httpOnly: true })
+      );
+      expect(res.cookie).toHaveBeenCalledWith(
+        'refreshToken',
+        'fakeRefreshToken',
+        expect.objectContaining({ httpOnly: true })
+      );
+      // Los tokens NO van en el body → no expuestos a localStorage/XSS
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({ message: 'Login successful', userId: 'mockUserId' })
+      );
     });
 
-    // Define una prueba individual: verifica que se devuelve un error 401 si el usuario no es encontrado.
     it('should return 401 if user is not found', async () => {
-      // Configura el 'body' del objeto 'req' con credenciales de un usuario que no existe.
       req.body = { email: 'notfound@example.com', password: 'password123' };
-
-      // Simula que 'User.findOne' (mockeado) no encuentra ningún usuario, devolviendo 'null'.
       User.findOne.mockResolvedValue(null);
 
-      // Llama a la función 'login'.
       await login(req, res);
 
-      // Verifica que la respuesta tiene el código de estado HTTP 401 (Unauthorized).
       expect(res.status).toHaveBeenCalledWith(401);
-      // Verifica que el método 'json' de la respuesta fue llamado con el mensaje de credenciales inválidas.
       expect(res.json).toHaveBeenCalledWith({ message: 'Invalid credentials' });
     });
 
-    it('should handle database errors during login', async () => {
-      req.body = { email: 'test@example.com', password: 'password123' };
+    it('should return 401 if password is incorrect', async () => {
+      req.body = { email: 'test@example.com', password: 'wrongpassword' };
+      const user = { _id: 'mockUserId', email: 'test@example.com', password: 'hashedPassword' };
+      User.findOne.mockResolvedValue(user);
+      bcrypt.compare.mockResolvedValue(false);
 
-      // Simulate a database error
+      await login(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(401);
+      expect(res.json).toHaveBeenCalledWith({ message: 'Invalid credentials' });
+    });
+
+    it('should return 400 if password is missing', async () => {
+      req.body = { email: 'test@example.com' };
+
+      await login(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(res.json).toHaveBeenCalledWith({ message: 'Email and password are required' });
+    });
+
+    it('should return 400 if email is missing', async () => {
+      req.body = { password: 'password123' };
+
+      await login(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(400);
+    });
+
+    it('should return 400 if both fields are missing', async () => {
+      req.body = {};
+
+      await login(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(400);
+    });
+
+    it('should return 500 on database error', async () => {
+      req.body = { email: 'test@example.com', password: 'password123' };
       const dbError = new Error('Database timeout');
       dbError.name = 'MongoTimeoutError';
       User.findOne.mockRejectedValue(dbError);
 
       await login(req, res);
 
-      // Should call handleDatabaseError which returns 500
       expect(res.status).toHaveBeenCalledWith(500);
-      expect(res.json).toHaveBeenCalled();
     });
+  });
 
-    it('should return 400 if email or password are missing in login', async () => {
-      req.body = { email: 'test@example.com' }; // missing password
+  // -------------------------------------------------------------------------
+  // refresh
+  // -------------------------------------------------------------------------
+  describe('refresh', () => {
+    it('should return 401 if no refresh token cookie is provided', async () => {
+      // req.cookies.refreshToken no definido
 
-      await login(req, res);
+      await refresh(req, res);
 
-      expect(res.status).toHaveBeenCalledWith(400);
-      expect(res.json).toHaveBeenCalledWith({ message: 'Email and password are required' });
-    });
-
-    it('should return 400 if email is missing in login', async () => {
-      req.body = { password: 'password123' }; // missing email
-
-      await login(req, res);
-
-      expect(res.status).toHaveBeenCalledWith(400);
-      expect(res.json).toHaveBeenCalledWith({ message: 'Email and password are required' });
-    });
-
-    it('should return 400 if both email and password are missing in login', async () => {
-      req.body = {}; // missing both
-
-      await login(req, res);
-
-      expect(res.status).toHaveBeenCalledWith(400);
-      expect(res.json).toHaveBeenCalledWith({ message: 'Email and password are required' });
-    });
-
-    // Define una prueba individual: verifica que se devuelve un error 401 si la contraseña es incorrecta.
-    it('should return 401 if password is incorrect', async () => {
-      // Configura el 'body' del objeto 'req' con un email existente pero una contraseña incorrecta.
-      req.body = { email: 'test@example.com', password: 'wrongpassword' };
-      // Crea un objeto 'user' simulado.
-      const user = { _id: 'mockUserId', email: 'test@example.com', password: 'hashedPassword' };
-
-      // Simula que 'User.findOne' encuentra al usuario.
-      User.findOne.mockResolvedValue(user);
-      // Simula que 'bcrypt.compare' (mockeado) indica que la contraseña proporcionada es incorrecta.
-      bcrypt.compare.mockResolvedValue(false);
-
-      // Llama a la función 'login'.
-      await login(req, res);
-
-      // Verifica que la respuesta tiene el código de estado HTTP 401 (Unauthorized).
       expect(res.status).toHaveBeenCalledWith(401);
-      // Verifica que el método 'json' de la respuesta fue llamado con el mensaje de credenciales inválidas.
-      expect(res.json).toHaveBeenCalledWith({ message: 'Invalid credentials' });
+      expect(res.json).toHaveBeenCalledWith({ message: 'No refresh token provided' });
+    });
+
+    it('should return 401 if jwt.verify throws (token expirado o manipulado)', async () => {
+      req.cookies.refreshToken = 'expiredToken';
+      jwt.verify.mockImplementation(() => {
+        throw new Error('jwt expired');
+      });
+
+      await refresh(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(401);
+      expect(res.json).toHaveBeenCalledWith({ message: 'Invalid refresh token' });
+    });
+
+    it('should return 401 if user is not found in DB', async () => {
+      req.cookies.refreshToken = 'validRefreshToken';
+      jwt.verify.mockReturnValue({ userId: 'mockUserId' });
+      User.findById.mockReturnValue({ select: jest.fn().mockResolvedValue(null) });
+
+      await refresh(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(401);
+      expect(res.json).toHaveBeenCalledWith({ message: 'Invalid refresh token' });
+    });
+
+    it('should return 401 if stored hash does not match (token revocado)', async () => {
+      req.cookies.refreshToken = 'validRefreshToken';
+      jwt.verify.mockReturnValue({ userId: 'mockUserId' });
+      // El hash almacenado es diferente → token revocado (logout previo)
+      User.findById.mockReturnValue({
+        select: jest.fn().mockResolvedValue({
+          _id: 'mockUserId',
+          refreshToken: 'differentStoredHash_thatWillNotMatch',
+        }),
+      });
+
+      await refresh(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(401);
+      expect(res.json).toHaveBeenCalledWith({ message: 'Invalid refresh token' });
+    });
+
+    it('should issue a new access token cookie when both barriers pass', async () => {
+      const tokenValue = 'validRefreshToken';
+      req.cookies.refreshToken = tokenValue;
+      jwt.verify.mockReturnValue({ userId: 'mockUserId' });
+      // El hash almacenado DEBE coincidir con SHA-256('validRefreshToken')
+      const correctHash = hashToken(tokenValue);
+      User.findById.mockReturnValue({
+        select: jest.fn().mockResolvedValue({
+          _id: 'mockUserId',
+          refreshToken: correctHash,
+        }),
+      });
+      jwt.sign.mockReturnValue('newAccessToken');
+
+      await refresh(req, res);
+
+      expect(res.cookie).toHaveBeenCalledWith(
+        'accessToken',
+        'newAccessToken',
+        expect.objectContaining({ httpOnly: true })
+      );
+      expect(res.json).toHaveBeenCalledWith({ message: 'Token refreshed successfully' });
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // logout
+  // -------------------------------------------------------------------------
+  describe('logout', () => {
+    it('should clear cookies and invalidate token in DB', async () => {
+      const tokenValue = 'validRefreshToken';
+      req.cookies.refreshToken = tokenValue;
+      User.findOneAndUpdate.mockResolvedValue({});
+
+      await logout(req, res);
+
+      // Se busca en DB por el hash SHA-256 del token recibido
+      expect(User.findOneAndUpdate).toHaveBeenCalledWith(
+        { refreshToken: hashToken(tokenValue) },
+        { $unset: { refreshToken: 1 } }
+      );
+      expect(res.clearCookie).toHaveBeenCalledWith('accessToken', expect.any(Object));
+      expect(res.clearCookie).toHaveBeenCalledWith('refreshToken', expect.any(Object));
+      expect(res.json).toHaveBeenCalledWith({ message: 'Logged out successfully' });
+    });
+
+    it('should clear cookies even without refresh token cookie (logout graceful)', async () => {
+      // req.cookies.refreshToken no definido → no se consulta la DB
+
+      await logout(req, res);
+
+      expect(User.findOneAndUpdate).not.toHaveBeenCalled();
+      expect(res.clearCookie).toHaveBeenCalledWith('accessToken', expect.any(Object));
+      expect(res.clearCookie).toHaveBeenCalledWith('refreshToken', expect.any(Object));
+      expect(res.json).toHaveBeenCalledWith({ message: 'Logged out successfully' });
+    });
+
+    it('should still clear cookies if DB update fails (graceful degradation)', async () => {
+      req.cookies.refreshToken = 'validRefreshToken';
+      User.findOneAndUpdate.mockRejectedValue(new Error('DB error'));
+
+      await logout(req, res);
+
+      // Aunque la DB falló, las cookies se borran para proteger al usuario
+      expect(res.clearCookie).toHaveBeenCalledWith('accessToken', expect.any(Object));
+      expect(res.clearCookie).toHaveBeenCalledWith('refreshToken', expect.any(Object));
+      expect(res.json).toHaveBeenCalledWith({ message: 'Logged out successfully' });
     });
   });
 });
