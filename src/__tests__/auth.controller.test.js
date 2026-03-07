@@ -277,7 +277,7 @@ describe('Auth Controller', () => {
         'newAccessToken',
         expect.objectContaining({ httpOnly: true })
       );
-      expect(res.json).toHaveBeenCalledWith({ message: 'Token refreshed successfully' });
+      expect(res.json).toHaveBeenCalledWith({ message: 'Token refreshed successfully', accessToken: 'newAccessToken' });
     });
   });
 
