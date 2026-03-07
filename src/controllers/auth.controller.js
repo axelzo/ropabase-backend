@@ -130,7 +130,12 @@ export const login = async (req, res) => {
     setAuthCookies(res, accessToken, refreshToken);
 
     logAuthInfo('Login exitoso, cookies emitidas', user._id);
-    return sendSuccessResponse(res, { message: 'Login successful', userId: user._id });
+    // Los tokens se incluyen en el body ADEMÁS de las cookies.
+    // Web: ignora el body y usa las cookies HTTP-only (comportamiento sin cambios).
+    // Mobile: lee los tokens del body y los guarda en SecureStore (iOS Keychain /
+    // Android Keystore), ya que React Native no tiene acceso al jar de cookies del
+    // navegador.
+    return sendSuccessResponse(res, { message: 'Login successful', userId: user._id, accessToken, refreshToken });
   } catch (error) {
     return handleDatabaseError(res, error, 'hacer login');
   }
@@ -141,7 +146,12 @@ export const login = async (req, res) => {
 // @access  Public (requiere cookie refreshToken)
 export const refresh = async (req, res) => {
   logAuthInfo('Petición de refresh token');
-  const { refreshToken } = req.cookies;
+  // Web:    envía el token como cookie HTTP-only → req.cookies.refreshToken.
+  // Mobile: no tiene jar de cookies; envía el token en el body de la petición.
+  // El operador ?? garantiza que si la cookie existe se usa primero (web), y solo
+  // si no existe se intenta el body (mobile). Ambos clientes comparten el mismo
+  // endpoint sin ninguna lógica de detección de plataforma.
+  const refreshToken = req.cookies.refreshToken ?? req.body.refreshToken;
 
   if (!refreshToken) {
     return sendErrorResponse(res, 'No refresh token provided', HTTP_STATUS.UNAUTHORIZED);
@@ -175,7 +185,8 @@ export const refresh = async (req, res) => {
     });
 
     logAuthInfo('Access token renovado exitosamente', user._id);
-    return sendSuccessResponse(res, { message: 'Token refreshed successfully' });
+    // Igual que en login: cookie para web, body para mobile.
+    return sendSuccessResponse(res, { message: 'Token refreshed successfully', accessToken: newAccessToken });
   } catch (error) {
     // jwt.verify falla si el token está expirado o tiene firma inválida.
     return sendErrorResponse(res, 'Invalid refresh token', HTTP_STATUS.UNAUTHORIZED);
@@ -187,7 +198,11 @@ export const refresh = async (req, res) => {
 // @access  Public
 export const logout = async (req, res) => {
   logAuthInfo('Petición de logout');
-  const { refreshToken } = req.cookies;
+  // Misma lógica dual que en /refresh: cookie (web) con fallback a body (mobile).
+  // Es necesario para poder invalidar el hash del refreshToken en la base de datos.
+  // Sin este token no podemos encontrar al usuario y el logout queda incompleto
+  // (el refreshToken seguiría activo en la DB aunque el cliente lo borre).
+  const refreshToken = req.cookies.refreshToken ?? req.body?.refreshToken;
 
   if (refreshToken) {
     try {
